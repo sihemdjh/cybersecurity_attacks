@@ -4,7 +4,9 @@ import geoip2.database
 import plotly.io
 plotly.io.renderers.default = "browser"
 import plotly.express as px
+import plotly.graph_objects as go
 import requests
+import random
 import django
 from django.conf import settings
 settings.configure(
@@ -13,7 +15,6 @@ settings.configure(
     )
 django.setup()
 from django.contrib.gis.geoip2 import GeoIP2
-
 geoIP = GeoIP2()
 
 maxmind_geoip2_db_url = "https://www.maxmind.com/en/accounts/1263991/geoip/downloads"
@@ -39,6 +40,7 @@ def piechart_col( col , names = None ) :
 df = df.rename( columns = { "Timestamp" : "date" ,
                            "Alerts/Warnings" : "Alert Trigger" ,
                            })
+df = df.drop( "User Information" , axis = 1 )
 print( df.describe())
 
 # NAs
@@ -58,47 +60,20 @@ print( f"dates go from { date_start } and { date_end }" )
 fig = px.histogram( df , col_name )
 fig.show()
 
-#%% IP address --> country , city with geoip2 ___ TRASH IT !!!!
-
-def ip_to_country( ip_address ) :
-    print( ip_address )
-    try :
-        with geoip2.database.Reader( "/Users/kalooina/Documents/Paperwork/scolar/DSTI/2025:2026/Machine Learning/cybersecurity_attacks ( project1 )/geolite2_db/GeoLite2-City.mmdb" ) as reader :
-            response = reader.city( ip_address )
-            country = response.country.name
-        return country
-    except :
-        return pd.NA
-def ip_to_city( ip_address ) :
-    print( ip_address )
-    try :
-        with geoip2.database.Reader( "/Users/kalooina/Documents/Paperwork/scolar/DSTI/2025:2026/Machine Learning/cybersecurity_attacks ( project1 )/geolite2_db/GeoLite2-City.mmdb" ) as reader :
-            response = reader.city( ip_address )
-            city = response.subdivisions.most_specific.name
-        return city 
-    except :
-        return pd.NA
-df[ "IP country" ] = df[ "Source IP Address" ].apply( lambda x : ip_to_country( x ))
-df[ "IP city" ] = df[ "Source IP Address" ].apply( lambda x : ip_to_city( x ))
-
-#%% IP address 
+# IP address 
 
 def ip_to_coords( ip_address ) :
     ret = pd.Series( dtype = object )
     try :
         res = geoIP.geos( ip_address ).wkt
         lon , lat = res.replace( "(" , "" ).replace( ")" , "" ).split()[ 1 : ]
-        # ret = ret.append( pd.Series([ lat , lon ]))
         ret = pd.concat([ ret , pd.Series([ lat , lon ])] , ignore_index = True )
     except :
-        # ret = ret.append( pd.Series([ pd.NA , pd.NA ]))
         ret = pd.concat([ ret , pd.Series([ pd.NA , pd.NA ])] , ignore_index = True )
     try :
         res = geoIP.city( ip_address )
-        # ret = ret.append( pd.Series([ res[ "country_name" ] , res[ "city" ]]))
         ret = pd.concat([ ret , pd.Series([ res[ "country_name" ] , res[ "city" ]])] , ignore_index = True )
     except :
-        # ret = ret.append( pd.Series([ pd.NA , pd.NA ]))
         ret = pd.concat([ ret , pd.Series([ pd.NA , pd.NA ])] , ignore_index = True )
     return ret
 df.insert( 2 , "IP latitude" , value = pd.NA )
@@ -107,22 +82,51 @@ df.insert( 4 , "IP country" , value = pd.NA )
 df.insert( 5 , "IP city" , value = pd.NA )
 df[[ "IP latitude" , "IP longitude" , "IP country" , "IP city" ]] = df[ "Source IP Address" ].apply( lambda x : ip_to_coords( x ))
 
+#%% graph 3
+
+fig = go.Figure( go.Scattergeo(
+    lat = df[ "IP latitude" ] ,
+    lon = df[ "IP longitude" ] ,
+    color = df[ "Anomaly Scores" ]
+    ))
+fig.update_geos( projection_type = "orthographic" )
+fig.update_layout( 
+    title = "Source IP Address locations" ,
+    geo_scope = "world" ,
+    height = 750 ,
+    margin = { "r" : 0 ,"t" : 0,"l" : 0 ,"b" : 0 })
+fig.show()
+
 #%%
 
-import plotly.graph_objects as go
+df_graph2 = (
+    df[ "IP country" ]
+    .value_counts()
+    .reset_index()
+)
 
-fig = go.Figure( data = go.Scattergeo(
-        lon = df[ "IP longitude" ] ,
-        lat = df[ "IP latitude" ] ,
-        mode = "markers" ,
-        # marker_color = df['cnt'],
-        ))
+df_graph2.columns = [ "country" , "count" ]
 
-fig.update_layout(
-        title = "Source IP Address locations" ,
-        geo_scope = "world" ,
-    )
+# Get full list of Plotly countries
+all_countries = px.data.gapminder()[ "country" ].unique()
+
+# Reindex to include all countries, fill missing ones with 0
+df_graph2 = df_graph2.set_index( "country" ).reindex( all_countries , fill_value = 0 ).reset_index()
+df_graph2.columns = [ "country" , "count" ]
+
+# Create choropleth
+fig = px.choropleth(
+    df_graph2 ,
+    locations = "country" ,
+    locationmode = "country names" ,
+    color = "count" ,
+    color_continuous_scale = "inferno" ,
+    projection = "orthographic" ,
+    title = "Global Population by Country" ,
+)
+
 fig.show()
+
 
 #%% protocol
 
@@ -164,7 +168,7 @@ df[ col_name ] = df[ col_name ].fillna( 0 )
 df.loc[ df[ col_name ] == "Alert Triggered" , col_name ] = 1
 piechart_col( col_name , names = [ "Alert triggered" , "Alert not triggered" ] )
 
-# Attack Type
+# Attack Type !!!! TARGET VARIABLE !!!!
 
 col_name = "Attack Type"
 print( df[ col_name ].value_counts())
@@ -203,8 +207,23 @@ df.loc[ df[ col_name ] == "Medium" , col_name ] = 0
 df.loc[ df[ col_name ] == "High" , col_name ] = + 1
 piechart_col( col_name , [ "Low" , "Medium" , "High" ])
 
+# Device Information
 
+col_name = "Device Information"
+print( df[ col_name ].value_counts())
+# --> to be split into several columns to be atomized [ browser/browser_version (device) ]
+df[ "broswer" ] = df[ col_name ].split()[ 0 ].split( "" )
 
+def atomization_DeviceInformation( info ) : # need to take process splitting for each case of device
+    print( info )
+    i1 , i2 = info.split(" (")
+    i2 , i3 = i2.split( ")")
+    i10 , i11 = i1.split( "/" )
+    i2 = i2.split( "; " )
+    i3 = i3.split()
+    return pd.Series([ i10 , i11 , i2 , i3 ])
+info = df.loc[ random.randint( 0 , df.shape[ 0 ]) , "Device Information" ]
+print( atomization_DeviceInformation( info ))
 
 
 
