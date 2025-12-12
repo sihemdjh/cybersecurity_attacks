@@ -1,0 +1,11 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Data and DB directories
+
+db/*
+data/*
+
+# Cache directories
+**/*__pycache__*

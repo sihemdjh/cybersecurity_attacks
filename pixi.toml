@@ -1,0 +1,26 @@
+[workspace]
+channels = ["conda-forge"]
+name = "cybersecurity_attacks"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+# This command runs the entire pipeline
+run-pipeline = "python pipeline.py"
+
+#This command runs the generator for the ascii representation of the directory tree excluding directories and files preceded by '.'
+gen-dir-repr = "pwsh -Command './generate_ascii_dir_repr.ps1 ./ -Exclude .*, __pycache__ -Depth 3'"
+
+[dependencies]
+django = ">=6.0,<7"
+pandas = ">=2.3.3,<3"
+requests = ">=2.32.5,<3"
+plotly = ">=6.5.0,<7"
+geoip2 = ">=4.8.0,<5"
+gdal = ">=3.12.0,<4"
+pandas-stubs = ">=2.3.3.251201,<3"
+pyarrow = ">=22.0.0,<23"
+geopandas = ">=1.1.1,<2"
+geocoder = ">=1.38.1,<2"
+pyrosm = ">=0.6.2,<0.7"
+curl = ">=8.17.0,<9"
