@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from src.download_files import GetFiles
+from src.payload_analyzer import PayloadAnalyzer
 import json
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -272,7 +273,13 @@ class EDA():
         invalid_headers = df_payload_analysis[~is_valid_headers]
         print(f"Invalid packets len: {len(invalid_headers)}")
         print(invalid_headers)
-
+        
+        pa = PayloadAnalyzer(self.cybersecurity_df, payload_col="Payload Data")
+        pa_is_lorem = df_payload_analysis['Payload Data'].apply(lambda x: pa.is_lorem_ipsum(payload_text=x))
+        
+        print(pa_is_lorem.value_counts())
+        
+        df_payload_analysis['Payload Data Translated'] = df_payload_analysis['Payload Data'].apply(lambda x: pa.payload_translate(payload_text=x))
         # Persist analysis results for further investigation
         df_payload_analysis.to_parquet(self.data_dir + "ds_payload_analysis.parquet")
 
