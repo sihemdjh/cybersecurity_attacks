@@ -9,3 +9,7 @@ data/*
 
 # Cache directories
 **/*__pycache__*
+
+# .env (unused for now)
+
+.env
