@@ -386,3 +386,112 @@ print( df[ col_name ].value_counts())
 df = catvar_mapping( col_name , [ "Firewall" ] , [ "Firewall" ])
 # piechart_col( col_name , [ "Firewall" , "Server" ])
 crosstab_col( "Log Source Firewall" , "Firewall Logs" , "logsource" , "firewallogs" )
+
+
+#%% general crosstable
+
+crosstabs[ "general" ] = pd.crosstab( 
+    index = [ 
+        df[ "Source Port ephemeral" ] , 
+        df[ "Destination Port ephemeral"] ,
+        df[ "Protocol" ] ,
+        df[ "Packet Type Control" ] ,
+        df[ "Traffic Type" ] ,
+        df[ "Malware Indicators" ] ,
+        df[ "Alert Trigger" ] ,
+        df[ "Attack Signature patA" ] ,
+        df[ "Action Taken" ] ,
+        df[ "Severity Level" ] ,
+        df[ "Network Segment" ] ,
+        df[ "Firewall Logs" ] ,
+        df[ "IDS/IPS Alerts" ] ,
+        df[ "Log Source Firewall" ]
+    ] , 
+    columns = df[ "Attack Type" ])
+
+
+#%% SARIMA analysis on Attack type
+
+Attacks_pday = df.copy( deep = True )
+Attacks_pday[ "date_dd" ] = Attacks_pday[ "date" ].dt.floor( "d" )
+Attacks_pday = Attacks_pday.groupby([ "date_dd" , "Attack Type" ]).size().unstack().iloc[ 1 : - 1 , ]
+
+# plot n attacks per day
+fig = subp(
+    rows = 3 ,
+    cols = 1 ,
+    subplot_titles = (
+        "Malware" ,
+        "Intrusion" ,
+        "DDos" ,
+        )
+    )
+fig.add_trace(
+    go.Scatter(
+        x = Attacks_pday.index ,
+        y = Attacks_pday[ "Malware" ] ,
+    ) ,
+    row = 1 ,
+    col = 1 ,
+    )
+fig.add_trace(
+    go.Scatter(
+        x = Attacks_pday.index ,
+        y = Attacks_pday[ "Intrusion" ] ,
+    ) ,
+    row = 2 ,
+    col = 1 ,
+    )
+fig.add_trace(
+    go.Scatter(
+        x = Attacks_pday.index ,
+        y = Attacks_pday[ "DDoS" ] ,
+    ) ,
+    row = 3 ,
+    col = 1 ,
+    )
+
+# plot ACF & PACF
+
+fig = subp(
+    rows = 3 ,
+    cols = 2 ,
+    subplot_titles = (
+        "Malware ACF" ,
+        "Malware PACF" ,
+        "Intrusion ACF" ,
+        "Intrusion PACF" ,
+        "DDoS ACF" ,
+        "DDoS PACF" ,
+        )
+    )
+from statsmodels.tsa.stattools import pacf
+from statsmodels.tsa.stattools import acf
+import plotly.graph_objects as go
+
+Attacktype_TSanalysis = {}
+nlags = 100
+for i , attacktype in enumerate([ "Malware" , "Intrustion" , "DDoS" ]) :
+    Attacktype_TSanalysis[ f"{ attacktype }_ACF" ] = acf( Attacks_pday[ "Malware" ] ,  nlags = nlags )
+    Attacktype_TSanalysis[ f"{ attacktype }_PACF" ] = pacf( Attacks_pday[ "Malware" ] ,  nlags = nlags )
+    fig.add_trace(
+        go.Scatter(
+            x = list( range( 0 , nlags + 1 )) , 
+            y = Attacktype_TSanalysis[ f"{ attacktype }_ACF" ] ,
+            mode = "lines" ,
+            name = "ACF" ,
+        ) ,
+        row = i + 1 ,
+        col = 1 ,
+        )
+    fig.add_trace(
+        go.Scatter(
+            x = list( range( 0 , nlags + 1 )) , 
+            y = Attacktype_TSanalysis[ f"{ attacktype }_PACF" ] ,
+            mode = "lines" ,
+            name = "PACF" ,
+        ) ,
+        row = i + 1,
+        col = 2 ,
+        )
+fig.show()
