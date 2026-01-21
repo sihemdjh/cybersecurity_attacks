@@ -14,6 +14,8 @@ from plotly.subplots import make_subplots as subp
 from sklearn.metrics import matthews_corrcoef
 import random
 import django
+from user_agents import parse
+from user_agents import parse as ua_parse
 from django.conf import settings
 # django settings for geoIP2
 settings.configure(
@@ -30,7 +32,8 @@ geoip2_doc_url = "https://geoip2.readthedocs.io/en/latest/"
 geoip2_django_doc_url = "https://docs.djangoproject.com/en/5.2/ref/contrib/gis/geoip2/"
 
 # loadding dataset
-df = pd.read_csv("data/cybersecurity_attacks.csv" )
+# df = pd.read_csv( "data/cybersecurity_attacks.csv" )
+df = pd.read_csv( "data/df.csv" , sep = "|" , index_col = 0 )
 
 # transform categorical variable to binary variables [ 0 , 1 ]
 def catvar_mapping( col_name , values , name = None) : 
@@ -131,6 +134,7 @@ fig.show()
 
 
 #%% IP address
+
 i = 2
 for destsource in [ "Source" , "Destination" ] :
     col = df.columns.get_loc( f"{ destsource } IP Address" ) + 1
@@ -320,7 +324,7 @@ col_name = "Protocol"
 """
 print( df[ col_name ].value_counts())
 piechart_col( col_name )
-df = catvar_mapping( col_name , [ "UDP" , "TCP" ])
+df = catvar_mapping( col_name , [ "UDP" , "ICMP" ])
 ### cross table Protocol x Attack Type
 crosstab_col( col_name , "Attack Type" , col_name , "attacktype" )
 
@@ -398,21 +402,55 @@ df.loc[ df[ col_name ] == "Medium" , col_name ] = 0
 df.loc[ df[ col_name ] == "High" , col_name ] = + 1
 piechart_col( col_name , [ "Low" , "Medium" , "High" ])
 
-# Device Information
+#%% Device Information
 col_name = "Device Information"
 print( df[ col_name ].value_counts())
-# --> to be split into several columns to be atomized [ browser/browser_version (device) ]
-def atomization_DeviceInformation( info ) : # need to take process splitting for each case of device
-    print( info )
-    i1 , i2 = info.split(" (")
-    i2 , i3 = i2.split( ")")
-    i10 , i11 = i1.split( "/" )
-    i2 = i2.split( "; " )
-    i3 = i3.split()
-    return pd.Series([ i10 , i11 , i2 , i3 ])
-info = df.loc[ random.randint( 0 , df.shape[ 0 ]) , "Device Information" ]
+col = df.columns.get_loc( col_name )
+df.insert( col + 1 , "Browser family" , value = pd.NA )
+df.insert( col + 2 , "Browser major" , value = pd.NA )
+df.insert( col + 3 , "Browser minor" , value = pd.NA )
+df.insert( col + 4 , "OS family" , value = pd.NA )
+df.insert( col + 5 , "OS major" , value = pd.NA )
+df.insert( col + 6 , "OS minor" , value = pd.NA )
+df.insert( col + 7 , "Device family" , value = pd.NA )
+df.insert( col + 8 , "Device brand" , value = pd.NA )
+df.insert( col + 9 , "Device type" , value = pd.NA )
+df.insert( col + 10 , "Device bot" , value = pd.NA )
 
-# Network Segment
+df[ "Browser family" ] = df[ col_name ].apply( lambda x : parse( x ).browser.family if parse( x ).browser.family is not None else pd.NA )
+df[ "Browser major" ] = df[ col_name ].apply( lambda x : parse( x ).browser.version[ 0 ] if parse( x ).browser.version[ 0 ] is not None else pd.NA )
+df[ "Browser minor" ] = df[ col_name ].apply( lambda x: parse( x ).browser.version[ 1 ] if parse( x ).browser.version[ 1 ] is not None else pd.NA )
+df[ "OS family" ] = df[ col_name ].apply( lambda x : parse( x ).os.family if parse( x ).os.family is not None else pd.NA )
+df[ "OS major" ] = df[ col_name ].apply( lambda x : parse( x ).os.version[ 0 ] if len( parse( x ).os.version ) > 0 and parse( x ).os.version[ 0 ] is not None else pd.NA )
+df[ "OS minor" ] = df[ col_name ].apply( lambda x : parse( x ).os.version[ 1 ] if len( parse( x ).os.version ) > 1 and parse( x ).os.version[ 1 ] is not None else pd.NA )
+df[ "OS patch" ] = df[ col_name ].apply( lambda x : parse( x ).os.version[ 2 ] if len( parse( x ).os.version ) > 2 and parse( x ).os.version[ 2 ] is not None else pd.NA )
+df[ "Device family" ] = df[ col_name ].apply (lambda x : parse( x ).device.family if parse( x ).device.family is not None else pd.NA )
+df[ "Device brand" ] = df[ col_name].apply( lambda x : parse( x ).device.brand if parse( x ).device.brand is not None else pd.NA )
+# do not agree with setting to not specified , why nnot leave it pd.NA ??
+# df[ "OS major" ] = df[ "OS_major" ].fillna( "not specified" )
+# df[ "OS minor" ] = df[ "OS_major" ].fillna( "not specified" )
+# df[ "OS patch" ] = df[ "OS_patch" ].fillna( "not specified" )
+# df[ "Device brand" ] = df[ "Device_brand" ].fillna( "not specified" )
+# device info
+def Device_type( ua_string ) :
+    try :
+        if not ua_string or pd.isna( ua_string ) :
+            return pd.NA
+        ua = ua_parse( ua_string )
+        if getattr( ua , "is_mobile" , False ) :
+            return "Mobile"
+        if getattr( ua , "is_tablet" , False ) :
+            return "Tablet"
+        if getattr( ua , "is_pc", False ) :
+            return "PC"
+        return pd.NA # replaced "Unknown" with pd.NA
+    except :
+        return pd.NA # replaced "Unknown" with pd.NA
+df[ "Device type" ] = df[ col_name ].apply( Device_type())
+# detection of bots
+df[ "Device bot" ] = df[ col_name ].apply( lambda x: ua_parse( x ).is_bot )
+
+#%% Network Segment
 col_name = "Network Segment"
 print( df[ col_name ].value_counts())
 """
@@ -466,6 +504,131 @@ df = catvar_mapping( col_name , [ "Firewall" ] , [ "Firewall" ])
 # piechart_col( col_name , [ "Firewall" , "Server" ])
 crosstab_col( "Log Source Firewall" , "Firewall Logs" , "logsource" , "firewallogs" )
 
+
+#%% seperat dfs for attack types
+
+df_attype = {}
+attypes = [ "Malware" , "Intrusion" , "DDoS" ]
+for attype in attypes :
+    df_attype[ attype ] = df[ df[ "Attack Type"] == attype ]
+
+
+#%% geo plot of "Attack Type" by "Anomaly Score"
+
+fig = subp(
+    rows = 3 ,
+    cols = 2 ,
+    specs = [
+        [{ "type" : "scattergeo" } , { "type" : "scattergeo" }] , 
+        [{ "type" : "scattergeo" } , { "type" : "scattergeo" }] ,
+        [{ "type" : "scattergeo" } , { "type" : "scattergeo" }] ,
+        ] ,
+    subplot_titles = (
+        "Source IP locations" ,
+        "Destination IP locations" 
+        )
+    )
+for i , ( attype , symb ) in enumerate( zip( attypes , [ "diamond" , "diamond" , "diamond" ])) :
+    fig.add_trace(
+        go.Scattergeo(
+            lat = df_attype[ attype ][ "Source IP latitude" ] ,
+            lon = df_attype[ attype ][ "Source IP longitude" ] ,
+            mode = "markers" ,
+            marker = {
+                "size" : 4 ,
+                "symbol" : symb ,
+                "color" : df_attype[ attype ][ "Anomaly Scores" ] ,
+                "colorscale" : "Viridis" ,
+                "cmin" : df_attype[ attype ][ "Anomaly Scores" ].min() ,
+                "cmax" : df_attype[ attype ][ "Anomaly Scores" ].max() ,
+                "colorbar" : { "title" : "Anomaly Score" }
+                }
+            ) ,
+        row = i + 1 , 
+        col = 1
+        )
+    fig.add_trace(
+        go.Scattergeo(
+            lat = df_attype[ attype ][ "Destination IP latitude" ] ,
+            lon = df_attype[ attype ][ "Destination IP longitude" ] ,
+            mode = "markers" ,
+            marker = {
+                "size" : 4 ,
+                "symbol" : symb ,
+                "color" : df_attype[ attype ][ "Anomaly Scores" ] ,
+                "colorscale" : "Viridis" ,
+                "cmin" : df_attype[ attype ][ "Anomaly Scores" ].min() ,
+                "cmax" : df_attype[ attype ][ "Anomaly Scores" ].max() ,
+                "colorbar" : { "title" : "Anomaly Score" }
+                }
+            ) ,
+        row = i + 1 , 
+        col = 2
+        )
+    i = i + 1
+fig.update_geos(
+    # projection_type = "orthographic" ,
+    showcountries = True ,
+    showland = True ,
+    # landcolor = "LightGreen"
+)
+fig.update_layout(
+    height = 4000 ,
+    margin = { 
+        "r" : 0 , 
+        "t" : 10 , 
+        "l" : 0 , 
+        "b" : 0 
+        } ,
+    title_text = "IP Address Locations" ,
+    title_x = 0.5
+)
+fig.show()
+
+
+#%% Packet Length x Attack Types
+
+fig = go.Figure()
+
+for i , ( attype , symb ) in enumerate( zip( attypes , [ "diamond" , "diamond" , "diamond" ])) :
+    fig.add_trace(
+        go.Scatter(
+            x = df_attype[ attype ][ "Packet Length" ] ,
+            y = [ i ] * df_attype[ attype ].shape[ 0 ] ,
+            mode = "markers" ,
+            name = attype ,
+            marker = {
+                "size" : 4 ,
+                "symbol" : symb ,
+                "opacity" : 0.1
+                }
+                ) ,
+
+        )
+    i = i + 1
+fig.show()
+
+# Anomaly Scores x Attack Types
+
+fig = go.Figure()
+
+for i , ( attype , symb ) in enumerate( zip( attypes , [ "diamond" , "diamond" , "diamond" ])) :
+    fig.add_trace(
+        go.Scatter(
+            x = df_attype[ attype ][ "Anomaly Scores" ] ,
+            y = [ i ] * df_attype[ attype ].shape[ 0 ] ,
+            mode = "markers" ,
+            name = attype ,
+            marker = {
+                "size" : 4 ,
+                "symbol" : symb ,
+                "opacity" : 0.1
+                }
+                ) ,
+
+        )
+    i = i + 1
+fig.show()
 
 #%% general crosstable
 
@@ -597,6 +760,8 @@ def sankey_diag( cols_bully = [
         )
     fig.show()
     
+    crosstabs = crosstabs / crosstabs.sum().sum() * 100
+    
     return crosstabs
 
 crosstabs = sankey_diag([
@@ -604,19 +769,164 @@ crosstabs = sankey_diag([
     False , # "Destination IP country"
     False , # "Source Port ephemeral"
     False , # "Destination Port ephemeral"
-    False , # "Protocol"
+    True , # "Protocol"
     False , # "Packet Type Control"
-    False , # "Traffic Type"
-    False , # "Malware Indicators"
+    True , # "Traffic Type"
+    True , # "Malware Indicators"
     False , # "Alert Trigger"
     False , # "Attack Signature patA"
     False , # "Action Taken"
     False , # "Severity Level"
     False , # "Network Segment"
     False , # "Firewall Logs"
-    False , # "IDS/IPS Alerts"
+    True , # "IDS/IPS Alerts"
     False , # "Log Source Firewall"
     ])
+
+
+#%%
+
+
+def paracat_diag( cols_bully = [
+        True , # "Source IP country"
+        True , # "Destination IP country"
+        True , # "Source Port ephemeral"
+        True , # "Destination Port ephemeral"
+        True , # "Protocol"
+        True , # "Packet Type Control"
+        True , # "Traffic Type"
+        True , # "Malware Indicators"
+        True , # "Alert Trigger"
+        True , # "Attack Signature patA"
+        True , # "Action Taken"
+        True , # "Severity Level"
+        True , # "Network Segment"
+        True , # "Firewall Logs"
+        True , # "IDS/IPS Alerts"
+        True , # "Log Source Firewall"
+        ] , 
+        colorvar = "Attack Type" ,
+        ntop = 10 ,
+        ) :
+    
+    cols = np.array([
+        "Source IP country" ,
+        "Destination IP country" ,
+        "Source Port ephemeral" ,
+        "Destination Port ephemeral" ,
+        "Protocol" , 
+        "Packet Type Control" ,
+        "Traffic Type" ,
+        "Malware Indicators" ,
+        "Alert Trigger" ,
+        "Attack Signature patA" ,
+        "Action Taken" ,
+        "Severity Level" ,
+        "Network Segment" ,
+        "Firewall Logs" ,
+        "IDS/IPS Alerts" ,
+        "Log Source Firewall"
+        ])
+    cols = cols[ np.array( cols_bully )]
+    
+    dims_var = {}
+    if "Source IP country" in cols :
+        SIP = df[ "Source IP country" ].copy( deep = True )
+        SIP.name = "SIP"
+        SIPlabs = pd.Series( SIP.value_counts().index[ : ntop ])
+        bully = ( SIP.isin( SIPlabs ) | SIP.isna())
+        SIP.loc[ ~ bully ] = "other"
+        SIPlabs = "SIP " + pd.concat([ SIPlabs , pd.Series([ "other" ])])
+        cols = cols[ cols != "Source IP country" ]
+        dims_var[ "SIP" ] = go.parcats.Dimension(
+            values = SIP ,
+            # categoryorder = "category ascending" ,
+            label = "Source IP country"
+            )
+        cols = np.append( cols , "SIP" )
+    if "Destination IP country" in cols :
+        DIP = df[ "Destination IP country" ].copy( deep = True )
+        DIP.name = "DIP"
+        DIPlabs = pd.Series( DIP.value_counts().index[ : ntop ])
+        bully = ( DIP.isin( DIPlabs ) | DIP.isna())
+        DIP.loc[ ~ bully ] = "other"
+        DIPlabs = "DIP " + pd.concat([ DIPlabs , pd.Series([ "other" ])])
+        cols = cols[ cols != "Destination IP country" ]
+        dims_var[ "DIP" ] = go.parcats.Dimension(
+            values = DIP ,
+            # categoryorder = "category ascending" ,
+            label = "Destination IP country"
+            )
+        cols = np.append( cols , "DIP" )
+    for col in cols[( cols != "SIP" ) & ( cols != "DIP" )] :
+        print( col )
+        dims_var[ col ] = go.parcats.Dimension(
+            values = df[ col ] ,
+            # categoryorder = "category ascending" ,
+            label = col
+            )
+    
+    dim_attypes = go.parcats.Dimension(
+        values = df[ "Attack Type" ], 
+        label = "Attack Type", 
+        # categoryarray = [ "Malware" , "Intrusion" , "DDoS" ] ,
+        ticktext = [ "Malware" , "Intrusion" , "DDoS" ]
+        )
+    
+    dims = [ dims_var[ col ] for col in cols ]
+    dims.append( dim_attypes )
+    
+    if colorvar == "SIP" :
+        colorvar = SIP
+    elif colorvar == "DIP" :
+        colorvar = DIP
+    elif ( colorvar in cols ) or ( colorvar == "Attack Type" ) :
+        colorvar = df[ colorvar ]
+    else :
+        ValueError( "colorvar must be in cols" )
+    catcolor = colorvar.unique()
+    catcolor_n = catcolor.shape[ 0 ]
+    color = colorvar.map({ cat : i for i , cat in enumerate( catcolor )})
+    positions = [ i / ( catcolor_n - 1 ) if ( catcolor_n > 1 ) else 0 for i in range( 0 , catcolor_n )]
+    palette = px.colors.sequential.Viridis
+    colors = [ px.colors.sample_colorscale( palette , p )[ 0 ] for p in positions ]
+    colorscale = [[ positions[ i ] , colors[ i ]] for i in range( 0 , catcolor_n )]
+    
+    fig = go.Figure( data = [ go.Parcats( 
+        dimensions = dims ,
+        line = { 
+            "color" : color ,
+            "colorscale" : colorscale ,
+            "shape" : "hspline" ,
+            } ,
+        hoveron = "color" ,
+        hoverinfo = "count+probability" ,
+        labelfont = { "size" : 18 , "family" : "Times" } ,
+        tickfont = { "size" : 16 , "family" : "Times" } ,
+        arrangement = "freeform" ,
+        )])
+    fig.show()
+
+paracat_diag([
+    False , # "Source IP country"
+    False , # "Destination IP country"
+    False , # "Source Port ephemeral"
+    False , # "Destination Port ephemeral"
+    True , # "Protocol"
+    False , # "Packet Type Control"
+    True , # "Traffic Type"
+    False , # "Malware Indicators"
+    False , # "Alert Trigger"
+    True , # "Attack Signature patA"
+    False , # "Action Taken"
+    True , # "Severity Level"
+    True , # "Network Segment"
+    False , # "Firewall Logs"
+    False , # "IDS/IPS Alerts"
+    False , # "Log Source Firewall"
+    ] ,
+    colorvar = "Attack Signature patA" ,
+    )
 
 
 #%% coefficients computation
@@ -803,7 +1113,7 @@ fig.show()
 
 #%%
 
-df.to_csv( "df" , sep = "|" )
+df.to_csv( "data/df.csv" , sep = "|" )
 
 
 
@@ -817,6 +1127,66 @@ df.to_csv( "df" , sep = "|" )
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+#%%
+
+rw = 30
+
+tr1 = go.Scatter(
+    x = Attacks_pday.index ,
+    y = Attacks_pday[ "Malware" ].rolling( rw ).mean() ,
+    line_color = "blue" ,
+)
+tr2 = go.Scatter(
+    x = Attacks_pday.index ,
+    y = Attacks_pday[ "Intrusion" ].rolling( rw ).mean() ,
+    line_color = "red" ,
+    # yaxis = "y2"
+)
+tr3 = go.Scatter(
+    x = Attacks_pday.index ,
+    y = Attacks_pday[ "DDoS" ].rolling( rw ).mean() ,
+    line_color = "#000000" ,
+    # yaxis = "y2" 
+)
+
+fig = subp()
+fig.add_trace(tr1)
+fig.add_trace(tr2)
+fig.add_trace(tr3)
+fig.show()
+
+#%%
+
+px.line(
+    Attacks_pday ,
+    x = Attacks_pday.index ,
+    y = Attacks_pday[ "DDoS" ].rolling( 15 ).mean() ,
+    mode = "line" ,
+    title = "Number of DDoS attacks MA per day"
+)
+
+#%%
+Attacks_pmonth = df.copy( deep = True )
+Attacks_pmonth[ "date_mm" ] = Attacks_pmonth[ "date" ].dt.ceil( "d" )
+Attacks_pmonth = Attacks_pmonth.groupby([ "date_mm" , "Attack Type" ]).size().unstack().iloc[ 1 : - 1 , ]
+px.line(
+    Attacks_pmonth ,
+    x = Attacks_pmonth.index ,
+    y = "DDoS" ,
+    title = "Number of DDoS attacks per month"
+)
 
 
 
