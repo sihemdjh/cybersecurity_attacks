@@ -31,7 +31,7 @@ maxmind_geoip2_db_url = "https://www.maxmind.com/en/accounts/1263991/geoip/downl
 geoip2_doc_url = "https://geoip2.readthedocs.io/en/latest/"
 geoip2_django_doc_url = "https://docs.djangoproject.com/en/5.2/ref/contrib/gis/geoip2/"
 
-# loadding dataset
+# loading dataset
 # df = pd.read_csv( "data/cybersecurity_attacks.csv" )
 df = pd.read_csv( "data/df.csv" , sep = "|" , index_col = 0 )
 
@@ -137,11 +137,15 @@ fig.show()
 
 i = 2
 for destsource in [ "Source" , "Destination" ] :
-    col = df.columns.get_loc( f"{ destsource } IP Address" ) + 1
-    df.insert( col , f"{ destsource } IP latitude" , value = pd.NA )
-    df.insert( col + 1 , f"{ destsource } IP longitude" , value = pd.NA )
-    df.insert( col + 2 , f"{ destsource } IP country" , value = pd.NA )
-    df.insert( col + 3 , f"{ destsource } IP city" , value = pd.NA )
+    col = df.columns.get_loc( f"{ destsource } IP Address" )
+    col_insert = [
+        f"{ destsource } IP latitude" ,
+        f"{ destsource } IP longitude" ,
+        f"{ destsource } IP country" ,
+        f"{ destsource } IP city"
+        ]
+    for col , colnew_name in zip( range( col + 1 , col + len( col_insert ) + 1 ) , col_insert ) :
+        df.insert( col , colnew_name , value = pd.NA )
     df[[ f"{ destsource } IP latitude" , f"{ destsource } IP longitude" , f"{ destsource } IP country" , f"{ destsource } IP city" ]] = df[ f"{ destsource } IP Address" ].apply( lambda x : ip_to_coords( x ))
 
 ## IP address map graph
@@ -206,10 +210,14 @@ fig.show()
 col_name = "Proxy Information"
 # print( df[ col_name ].value_counts())
 col = df.columns.get_loc( col_name )
-df.insert( col + 1 , "Proxy latitude" , value = pd.NA )
-df.insert( col + 2 , "Proxy longitude" , value = pd.NA )
-df.insert( col + 3 , "Proxy country" , value = pd.NA )
-df.insert( col + 4 , "Proxy city" , value = pd.NA )
+col_insert = [ 
+        "Proxy latitude" ,
+        "Proxy longitude" ,
+        "Proxy country" ,
+        "Proxy city"
+        ]
+for col , colnew_name in zip( range( col + 1 , col + len( col_insert ) + 1 ) , col_insert ) :
+    df.insert( col , colnew_name , value = pd.NA )
 df[[ "Proxy latitude" , "Proxy longitude" , "Proxy country" , "Proxy city" ]] = df[ "Proxy Information" ].apply( lambda x : ip_to_coords( x ))
 
 def sankey_diag_IPs( ntop ) :
@@ -406,17 +414,21 @@ piechart_col( col_name , [ "Low" , "Medium" , "High" ])
 col_name = "Device Information"
 print( df[ col_name ].value_counts())
 col = df.columns.get_loc( col_name )
-df.insert( col + 1 , "Browser family" , value = pd.NA )
-df.insert( col + 2 , "Browser major" , value = pd.NA )
-df.insert( col + 3 , "Browser minor" , value = pd.NA )
-df.insert( col + 4 , "OS family" , value = pd.NA )
-df.insert( col + 5 , "OS major" , value = pd.NA )
-df.insert( col + 6 , "OS minor" , value = pd.NA )
-df.insert( col + 7 , "Device family" , value = pd.NA )
-df.insert( col + 8 , "Device brand" , value = pd.NA )
-df.insert( col + 9 , "Device type" , value = pd.NA )
-df.insert( col + 10 , "Device bot" , value = pd.NA )
-
+col_insert = [ 
+        "Browser family" ,
+        "Browser major" ,
+        "Browser minor" ,
+        "OS family" ,
+        "OS major" ,
+        "OS minor" ,
+        "OS patch" ,
+        "Device family" ,
+        "Device brand" ,
+        "Device type" ,
+        "Device bot"
+        ]
+for col , colnew_name in zip( range( col + 1 , col + len( col_insert ) + 1 ) , col_insert ) :
+    df.insert( col , colnew_name , value = pd.NA )
 df[ "Browser family" ] = df[ col_name ].apply( lambda x : parse( x ).browser.family if parse( x ).browser.family is not None else pd.NA )
 df[ "Browser major" ] = df[ col_name ].apply( lambda x : parse( x ).browser.version[ 0 ] if parse( x ).browser.version[ 0 ] is not None else pd.NA )
 df[ "Browser minor" ] = df[ col_name ].apply( lambda x: parse( x ).browser.version[ 1 ] if parse( x ).browser.version[ 1 ] is not None else pd.NA )
@@ -426,12 +438,6 @@ df[ "OS minor" ] = df[ col_name ].apply( lambda x : parse( x ).os.version[ 1 ] i
 df[ "OS patch" ] = df[ col_name ].apply( lambda x : parse( x ).os.version[ 2 ] if len( parse( x ).os.version ) > 2 and parse( x ).os.version[ 2 ] is not None else pd.NA )
 df[ "Device family" ] = df[ col_name ].apply (lambda x : parse( x ).device.family if parse( x ).device.family is not None else pd.NA )
 df[ "Device brand" ] = df[ col_name].apply( lambda x : parse( x ).device.brand if parse( x ).device.brand is not None else pd.NA )
-# do not agree with setting to not specified , why nnot leave it pd.NA ??
-# df[ "OS major" ] = df[ "OS_major" ].fillna( "not specified" )
-# df[ "OS minor" ] = df[ "OS_major" ].fillna( "not specified" )
-# df[ "OS patch" ] = df[ "OS_patch" ].fillna( "not specified" )
-# df[ "Device brand" ] = df[ "Device_brand" ].fillna( "not specified" )
-# device info
 def Device_type( ua_string ) :
     try :
         if not ua_string or pd.isna( ua_string ) :
@@ -446,9 +452,14 @@ def Device_type( ua_string ) :
         return pd.NA # replaced "Unknown" with pd.NA
     except :
         return pd.NA # replaced "Unknown" with pd.NA
-df[ "Device type" ] = df[ col_name ].apply( Device_type())
-# detection of bots
+df[ "Device type" ] = df[ col_name ].apply( lambda x : Device_type( x ))
 df[ "Device bot" ] = df[ col_name ].apply( lambda x: ua_parse( x ).is_bot )
+
+
+col_name = "Browser family"
+print( df[ col_name ].value_counts())
+df = catvar_mapping( col_name , [ "Logged" , "Blocked" ])
+piechart_col( col_name )
 
 #%% Network Segment
 col_name = "Network Segment"
@@ -511,7 +522,6 @@ df_attype = {}
 attypes = [ "Malware" , "Intrusion" , "DDoS" ]
 for attype in attypes :
     df_attype[ attype ] = df[ df[ "Attack Type"] == attype ]
-
 
 #%% geo plot of "Attack Type" by "Anomaly Score"
 
@@ -645,6 +655,17 @@ def sankey_diag( cols_bully = [
         True , # "Attack Signature patA"
         True , # "Action Taken"
         True , # "Severity Level"
+        True , # "Browser family"
+        True , # "Browser major"
+        True , # "Browser minor"
+        True , # "OS family"
+        True , # "OS major"
+        True , # "OS minor"
+        True , # "OS patch"
+        True , # "Device family"
+        True , # "Device brand"
+        True , # "Device type"
+        True , # "Device bot"
         True , # "Network Segment"
         True , # "Firewall Logs"
         True , # "IDS/IPS Alerts"
@@ -663,6 +684,17 @@ def sankey_diag( cols_bully = [
         "Attack Signature patA" ,
         "Action Taken" ,
         "Severity Level" ,
+        "Browser family" ,
+        "Browser major" ,
+        "Browser minor" ,
+        "OS family" ,
+        "OS major" ,
+        "OS minor" ,
+        "OS patch" ,
+        "Device family" ,
+        "Device brand" ,
+        "Device type" ,
+        "Device bot" ,
         "Network Segment" ,
         "Firewall Logs" ,
         "IDS/IPS Alerts" ,
@@ -769,17 +801,28 @@ crosstabs = sankey_diag([
     False , # "Destination IP country"
     False , # "Source Port ephemeral"
     False , # "Destination Port ephemeral"
-    True , # "Protocol"
+    False , # "Protocol"
     False , # "Packet Type Control"
-    True , # "Traffic Type"
-    True , # "Malware Indicators"
+    False , # "Traffic Type"
+    False , # "Malware Indicators"
     False , # "Alert Trigger"
     False , # "Attack Signature patA"
     False , # "Action Taken"
     False , # "Severity Level"
+    True , # "Browser family"
+    False , # "Browser major"
+    False , # "Browser minor"
+    True , # "OS family"
+    False , # "OS major"
+    False , # "OS minor"
+    False , # "OS patch"
+    False , # "Device family"
+    False , # "Device brand"
+    False , # "Device type"
+    False , # "Device bot"
     False , # "Network Segment"
     False , # "Firewall Logs"
-    True , # "IDS/IPS Alerts"
+    False , # "IDS/IPS Alerts"
     False , # "Log Source Firewall"
     ])
 
@@ -800,6 +843,17 @@ def paracat_diag( cols_bully = [
         True , # "Attack Signature patA"
         True , # "Action Taken"
         True , # "Severity Level"
+        True , # "Browser family"
+        True , # "Browser major"
+        True , # "Browser minor"
+        True , # "OS family"
+        True , # "OS major"
+        True , # "OS minor"
+        True , # "OS patch"
+        True , # "Device family"
+        True , # "Device brand"
+        True , # "Device type"
+        True , # "Device bot"
         True , # "Network Segment"
         True , # "Firewall Logs"
         True , # "IDS/IPS Alerts"
@@ -822,6 +876,17 @@ def paracat_diag( cols_bully = [
         "Attack Signature patA" ,
         "Action Taken" ,
         "Severity Level" ,
+        "Browser family" ,
+        "Browser major" ,
+        "Browser minor" ,
+        "OS family" ,
+        "OS major" ,
+        "OS minor" ,
+        "OS patch" ,
+        "Device family" ,
+        "Device brand" ,
+        "Device type" ,
+        "Device bot" ,
         "Network Segment" ,
         "Firewall Logs" ,
         "IDS/IPS Alerts" ,
@@ -914,18 +979,29 @@ paracat_diag([
     False , # "Destination Port ephemeral"
     True , # "Protocol"
     False , # "Packet Type Control"
-    True , # "Traffic Type"
+    False , # "Traffic Type"
     False , # "Malware Indicators"
     False , # "Alert Trigger"
-    True , # "Attack Signature patA"
+    False , # "Attack Signature patA"
     False , # "Action Taken"
-    True , # "Severity Level"
-    True , # "Network Segment"
+    False , # "Severity Level"
+    True , # "Browser family"
+    False , # "Browser major"
+    False , # "Browser minor"
+    True , # "OS family"
+    False , # "OS major"
+    False , # "OS minor"
+    False , # "OS patch"
+    False , # "Device family"
+    False , # "Device brand"
+    False , # "Device type"
+    False , # "Device bot"
+    False , # "Network Segment"
     False , # "Firewall Logs"
-    False , # "IDS/IPS Alerts"
+    True , # "IDS/IPS Alerts"
     False , # "Log Source Firewall"
     ] ,
-    colorvar = "Attack Signature patA" ,
+    colorvar = "Browser family" ,
     )
 
 
@@ -1114,80 +1190,5 @@ fig.show()
 #%%
 
 df.to_csv( "data/df.csv" , sep = "|" )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#%%
-
-rw = 30
-
-tr1 = go.Scatter(
-    x = Attacks_pday.index ,
-    y = Attacks_pday[ "Malware" ].rolling( rw ).mean() ,
-    line_color = "blue" ,
-)
-tr2 = go.Scatter(
-    x = Attacks_pday.index ,
-    y = Attacks_pday[ "Intrusion" ].rolling( rw ).mean() ,
-    line_color = "red" ,
-    # yaxis = "y2"
-)
-tr3 = go.Scatter(
-    x = Attacks_pday.index ,
-    y = Attacks_pday[ "DDoS" ].rolling( rw ).mean() ,
-    line_color = "#000000" ,
-    # yaxis = "y2" 
-)
-
-fig = subp()
-fig.add_trace(tr1)
-fig.add_trace(tr2)
-fig.add_trace(tr3)
-fig.show()
-
-#%%
-
-px.line(
-    Attacks_pday ,
-    x = Attacks_pday.index ,
-    y = Attacks_pday[ "DDoS" ].rolling( 15 ).mean() ,
-    mode = "line" ,
-    title = "Number of DDoS attacks MA per day"
-)
-
-#%%
-Attacks_pmonth = df.copy( deep = True )
-Attacks_pmonth[ "date_mm" ] = Attacks_pmonth[ "date" ].dt.ceil( "d" )
-Attacks_pmonth = Attacks_pmonth.groupby([ "date_mm" , "Attack Type" ]).size().unstack().iloc[ 1 : - 1 , ]
-px.line(
-    Attacks_pmonth ,
-    x = Attacks_pmonth.index ,
-    y = "DDoS" ,
-    title = "Number of DDoS attacks per month"
-)
-
-
 
 
